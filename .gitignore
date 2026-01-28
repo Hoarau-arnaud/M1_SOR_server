@@ -1,0 +1,4 @@
+*.db
+*.db-journal
+certs/*.pem
+certs/*-key.pem
