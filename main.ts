@@ -2,6 +2,10 @@ import { Application, Router } from "@oak/oak";
 import { oakCors } from "@tajpouria/cors";
 import pollsRouter from "./routes/polls.ts";
 import { ok } from "./types/api.ts";
+import usersRouter from "./routes/users.ts";
+import optionsRouter from "./routes/options.ts";
+import votesRouter from "./routes/votes.ts";
+
 const app = new Application();
 app.use(oakCors());
 
@@ -24,6 +28,18 @@ app.use(root.allowedMethods());
 
 app.use(pollsRouter.routes());
 app.use(pollsRouter.allowedMethods());
+
+app.use(usersRouter.routes());
+app.use(usersRouter.allowedMethods());
+
+app.use(pollsRouter.routes());
+app.use(pollsRouter.allowedMethods());
+
+app.use(optionsRouter.routes());
+app.use(optionsRouter.allowedMethods());
+
+app.use(votesRouter.routes());
+app.use(votesRouter.allowedMethods());
 
 const HOSTNAME = "127.0.0.1";
 const PORT = 8000;

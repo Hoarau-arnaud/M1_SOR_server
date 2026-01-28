@@ -58,6 +58,9 @@ le cache Deno
 la résolution des imports
 des infos sur le projet et les modules
 
+
+demarrage du server : deno task dev
+
 insèrtion en bdd d'un sondage :
 
 curl -X POST http://127.0.0.1:8000/polls \
