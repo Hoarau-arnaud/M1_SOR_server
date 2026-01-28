@@ -1,0 +1,88 @@
+Vite : http://localhost:5173
+
+Deno : http://localhost:8000
+
+nginx : https://localhost (443) et redirection depuis 80
+
+_________________________________________________________
+
+1) Base de données : 
+
+users : gère l’inscription/authentification et le rôle (USER/ADMIN).
+polls : un sondage (titre, description, dates, statut, règles de vote).
+poll_options : options de réponse d’un sondage.
+votes : enregistre les votes sur des options (par utilisateur connecté ou invité).
+
+Justification :
+Un sondage contient plusieurs options (relation 1-N).
+Les votes sont rattachés aux options (et au sondage) pour calculer les résultats par option (GROUP BY).
+Les invités sont supportés via user_id NULL et guest_token non NULL (contrainte XOR).
+
+MCD (cardinalités) :
+
+User (1) — (N) Poll
+Poll (1) — (N) PollOption
+PollOption (1) — (N) Vote
+User (1) — (N) Vote (optionnel car invité)
+
+
+Dans le repertoire server, le point d’entrée est le fichier main.ts
+
+deno add jsr:@oak/oak jsr:@tajpouria/cors jsr:@db/sqlite
+
+@oak/oak : framework serveur HTTP pour Deno (Application, Router, middleware, gestion des requêtes/réponses).
+
+@tajpouria/cors : middleware CORS pour autoriser le client (Vite/React) à appeler l’API (cross-origin).
+
+@db/sqlite : bibliothèque SQLite côté Deno pour accéder à une base SQLite (exécuter des requêtes SQL, lire/écrire des données).
+
+deno.json : à quoi sert-il ?
+deno.json est le fichier de configuration du projet Deno. Il peut contenir :
+des tasks (deno task dev, deno task test, etc.)
+des options de compilation/type-check
+des mappings d’imports (import maps)
+la configuration de lint/format
+
+Dans le TP, il sert notamment à définir la commande “dev” (watch/reload).
+
+deno.lock : à quoi sert-il ?
+deno.lock est un fichier de verrouillage des dépendances :
+il fige la résolution exacte des versions (reproductibilité)
+il évite des changements “surprise” de versions quand on réinstalle/relance ailleurs
+
+les dépendances sont mises en cache globalement (cache Deno) et réutilisées entre projets.
+La commande : 
+deno info
+affiche notamment :
+le cache Deno
+la résolution des imports
+des infos sur le projet et les modules
+
+insèrtion en bdd d'un sondage :
+
+curl -X POST http://127.0.0.1:8000/polls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "p1",
+    "ownerId": "u1",
+    "title": "Sondage TP2",
+    "description": "Premier sondage",
+    "status": "ACTIVE",
+    "allowGuests": true,
+    "allowMultiple": false,
+    "expiresAt": null,
+    "options": [
+      { "id": "o1", "text": "Option A", "position": 0 },
+      { "id": "o2", "text": "Option B", "position": 1 }
+    ]
+  }'
+
+
+
+
+
+
+
+
+
+
