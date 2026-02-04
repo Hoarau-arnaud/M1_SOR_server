@@ -1,15 +1,23 @@
+// server/main.ts
 import { Application, Router } from "@oak/oak";
 import { oakCors } from "@tajpouria/cors";
+
+import { errorMiddleware } from "./middlewares/error_middleware.ts";
+
 import pollsRouter from "./routes/polls.ts";
-import { ok } from "./types/api.ts";
 import usersRouter from "./routes/users.ts";
 import optionsRouter from "./routes/options.ts";
 import votesRouter from "./routes/votes.ts";
+import { ok } from "./types/api.ts";
+import { entropyMiddleware } from "./middlewares/entropy_middleware.ts";
 
 const app = new Application();
-app.use(oakCors());
 
-// Root router (health + hello)
+app.use(oakCors());
+app.use(errorMiddleware);
+app.use(entropyMiddleware);
+
+// Routes "root"
 const root = new Router();
 root.get("/", (ctx) => {
   ctx.response.status = 200;
@@ -20,26 +28,13 @@ root.get("/health", (ctx) => {
   ctx.response.body = ok({ ok: true });
 });
 
-// (optionnel) ws -> tu pourras faire routes/ws.ts plus tard
-// Ici on laisse simple pour TP2
+app.use(root.routes(), root.allowedMethods());
 
-app.use(root.routes());
-app.use(root.allowedMethods());
-
-app.use(pollsRouter.routes());
-app.use(pollsRouter.allowedMethods());
-
-app.use(usersRouter.routes());
-app.use(usersRouter.allowedMethods());
-
-app.use(pollsRouter.routes());
-app.use(pollsRouter.allowedMethods());
-
-app.use(optionsRouter.routes());
-app.use(optionsRouter.allowedMethods());
-
-app.use(votesRouter.routes());
-app.use(votesRouter.allowedMethods());
+// Routes modules
+app.use(usersRouter.routes(), usersRouter.allowedMethods());
+app.use(pollsRouter.routes(), pollsRouter.allowedMethods());
+app.use(optionsRouter.routes(), optionsRouter.allowedMethods());
+app.use(votesRouter.routes(), votesRouter.allowedMethods());
 
 const HOSTNAME = "127.0.0.1";
 const PORT = 8000;

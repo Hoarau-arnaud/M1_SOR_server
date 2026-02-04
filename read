@@ -1,3 +1,7 @@
+demarrage du server : deno task dev
+
+_________________________________________________________
+
 Vite : http://localhost:5173
 
 Deno : http://localhost:8000
@@ -59,7 +63,6 @@ la résolution des imports
 des infos sur le projet et les modules
 
 
-demarrage du server : deno task dev
 
 insèrtion en bdd d'un sondage :
 

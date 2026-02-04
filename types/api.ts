@@ -1,6 +1,5 @@
 // server/types/api.ts
 
-/** Codes d'erreur possibles renvoyés par l'API */
 export enum ApiErrorCode {
   NOT_FOUND = "NOT_FOUND",
   BAD_REQUEST = "BAD_REQUEST",
@@ -9,39 +8,28 @@ export enum ApiErrorCode {
   FORBIDDEN = "FORBIDDEN",
   CONFLICT = "CONFLICT",
   INTERNAL_ERROR = "INTERNAL_ERROR",
-  NOT_IMPLEMENTED = "NOT_IMPLEMENTED",
+  SERVER_ERROR = "SERVER_ERROR",
 }
 
-/** Détails d'une erreur */
 export interface ApiError {
   code: ApiErrorCode;
   message: string;
   details?: Record<string, unknown>;
 }
 
-/** Réponse succès : `data` est typé grâce à T */
-export type ApiSuccess<T> = {
-  success: true;
-  data: T;
-};
-
-/** Réponse erreur : union discriminée sur `success: false` */
-export type ApiFailure = {
-  success: false;
-  error: ApiError;
-};
-
-/** Union discriminée générique */
+export type ApiSuccess<T> = { success: true; data: T };
+export type ApiFailure = { success: false; error: ApiError };
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
-/** Helpers */
 export const ok = <T>(data: T): ApiSuccess<T> => ({ success: true, data });
 
-export const fail = (
-  code: ApiErrorCode,
-  message: string,
-  details?: Record<string, unknown>,
-): ApiFailure => ({
-  success: false,
-  error: { code, message, details },
-});
+export class APIException extends Error {
+  readonly code: ApiErrorCode;
+  readonly status: number;
+
+  constructor(code: ApiErrorCode, status: number, message: string) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}

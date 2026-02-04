@@ -1,6 +1,7 @@
+// server/routes/options.ts
 import { Router } from "@oak/oak";
 import type { SQLOutputValue } from "node:sqlite";
-import { ApiErrorCode, fail, ok } from "../types/api.ts";
+import { APIException, ApiErrorCode, ok } from "../types/api.ts";
 import { db } from "../db.ts";
 
 type OptionRow = {
@@ -26,14 +27,9 @@ const toNumber = (v: number | bigint) => typeof v === "bigint" ? Number(v) : v;
 
 const router = new Router({ prefix: "/polls" });
 
-/** GET /polls/:pollId/options */
 router.get("/:pollId/options", (ctx) => {
   const pollId = ctx.params.pollId;
-  if (!pollId) {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Missing pollId");
-    return;
-  }
+  if (!pollId) throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Missing pollId");
 
   const rows = db.prepare(
     `SELECT id, poll_id, text, position, created_at
@@ -45,9 +41,7 @@ router.get("/:pollId/options", (ctx) => {
   const options = [];
   for (const r of rows) {
     if (!isOptionRow(r)) {
-      ctx.response.status = 500;
-      ctx.response.body = fail(ApiErrorCode.INTERNAL_ERROR, "Invalid option row shape from database");
-      return;
+      throw new APIException(ApiErrorCode.INTERNAL_ERROR, 500, "Invalid option row shape from database");
     }
     options.push({
       id: r.id,
@@ -62,62 +56,45 @@ router.get("/:pollId/options", (ctx) => {
   ctx.response.body = ok(options);
 });
 
-/** POST /polls/:pollId/options */
 router.post("/:pollId/options", async (ctx) => {
   const pollId = ctx.params.pollId;
-  if (!pollId) {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Missing pollId");
-    return;
-  }
+  if (!pollId) throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Missing pollId");
 
   let body: unknown;
   try {
     body = await ctx.request.body.json();
   } catch {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Invalid JSON body");
-    return;
+    throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Invalid JSON body");
   }
 
   const input = body as Partial<{ id: string; text: string; position?: number }>;
   if (!input.id || !input.text) {
-    ctx.response.status = 422;
-    ctx.response.body = fail(ApiErrorCode.VALIDATION_ERROR, 'Expected body: { "id": string, "text": string, "position"?: number }');
-    return;
+    throw new APIException(
+      ApiErrorCode.VALIDATION_ERROR,
+      422,
+      'Expected body: { "id": string, "text": string, "position"?: number }',
+    );
   }
 
   try {
     db.prepare(
       `INSERT INTO poll_options (id, poll_id, text, position) VALUES (?, ?, ?, ?);`,
     ).run(input.id, pollId, input.text, input.position ?? 0);
-  } catch (err) {
-    console.error(err);
-    ctx.response.status = 409;
-    ctx.response.body = fail(ApiErrorCode.CONFLICT, "Failed to create option (id conflict or invalid poll_id)");
-    return;
+  } catch {
+    throw new APIException(ApiErrorCode.CONFLICT, 409, "Failed to create option (id conflict or invalid poll_id)");
   }
 
   ctx.response.status = 201;
   ctx.response.body = ok({ id: input.id });
 });
 
-/** DELETE /polls/:pollId/options/:optionId */
 router.delete("/:pollId/options/:optionId", (ctx) => {
   const pollId = ctx.params.pollId;
   const optionId = ctx.params.optionId;
+  if (!pollId || !optionId) throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Missing pollId or optionId");
 
-  if (!pollId || !optionId) {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Missing pollId or optionId");
-    return;
-  }
+  db.prepare(`DELETE FROM poll_options WHERE id = ? AND poll_id = ?;`).run(optionId, pollId);
 
-  const res = db.prepare(
-    `DELETE FROM poll_options WHERE id = ? AND poll_id = ?;`,
-  ).run(optionId, pollId);
-
-  // SQLite run() retourne un objet driver-dependent; on ne peut pas toujours lire changes
   ctx.response.status = 200;
   ctx.response.body = ok({ deleted: true, id: optionId });
 });

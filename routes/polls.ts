@@ -1,6 +1,7 @@
+// server/routes/polls.ts
 import { Router } from "@oak/oak";
 import type { SQLOutputValue } from "node:sqlite";
-import { ApiErrorCode, fail, ok } from "../types/api.ts";
+import { APIException, ApiErrorCode, ok } from "../types/api.ts";
 import type { CreatePollInput, Poll } from "../types/domain.ts";
 import { db } from "../db.ts";
 import { isPollOptionRow, isPollRow } from "../utils/guards.ts";
@@ -8,7 +9,7 @@ import { pollRowToApi } from "../utils/mappers.ts";
 
 const router = new Router({ prefix: "/polls" });
 
-// GET /polls  -> liste (sans options pour simplicité)
+// GET /polls (liste)
 router.get("/", (ctx) => {
   const rows = db.prepare(
     `SELECT id, owner_id, title, description, status, allow_guests, allow_multiple, created_at, expires_at
@@ -19,41 +20,27 @@ router.get("/", (ctx) => {
   const polls: Poll[] = [];
   for (const r of rows) {
     if (!isPollRow(r)) {
-      ctx.response.status = 500;
-      ctx.response.body = fail(ApiErrorCode.INTERNAL_ERROR, "Invalid PollRow shape from database");
-      return;
+      throw new APIException(ApiErrorCode.INTERNAL_ERROR, 500, "Invalid PollRow shape from database");
     }
-    polls.push(pollRowToApi(r, [])); // options=[] ici
+    polls.push(pollRowToApi(r, []));
   }
 
   ctx.response.status = 200;
   ctx.response.body = ok(polls);
 });
 
-// GET /polls/:pollId -> détail + options + vote_count
+// GET /polls/:pollId (détail + options + vote_count)
 router.get("/:pollId", (ctx) => {
   const pollId = ctx.params.pollId;
-  if (!pollId) {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Missing pollId");
-    return;
-  }
+  if (!pollId) throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Missing pollId");
 
   const rawPoll = db.prepare(
     `SELECT id, owner_id, title, description, status, allow_guests, allow_multiple, created_at, expires_at
      FROM polls WHERE id = ?;`,
   ).get(pollId) as Record<string, SQLOutputValue> | undefined;
 
-  if (!rawPoll) {
-    ctx.response.status = 404;
-    ctx.response.body = fail(ApiErrorCode.NOT_FOUND, `Poll "${pollId}" not found`);
-    return;
-  }
-  if (!isPollRow(rawPoll)) {
-    ctx.response.status = 500;
-    ctx.response.body = fail(ApiErrorCode.INTERNAL_ERROR, "Invalid PollRow shape from database");
-    return;
-  }
+  if (!rawPoll) throw new APIException(ApiErrorCode.NOT_FOUND, 404, `Poll "${pollId}" not found`);
+  if (!isPollRow(rawPoll)) throw new APIException(ApiErrorCode.INTERNAL_ERROR, 500, "Invalid PollRow shape from database");
 
   const rawOptions = db.prepare(
     `SELECT
@@ -73,9 +60,7 @@ router.get("/:pollId", (ctx) => {
   const optionRows = [];
   for (const o of rawOptions) {
     if (!isPollOptionRow(o)) {
-      ctx.response.status = 500;
-      ctx.response.body = fail(ApiErrorCode.INTERNAL_ERROR, "Invalid PollOptionRow shape from database");
-      return;
+      throw new APIException(ApiErrorCode.INTERNAL_ERROR, 500, "Invalid PollOptionRow shape from database");
     }
     optionRows.push(o);
   }
@@ -84,26 +69,23 @@ router.get("/:pollId", (ctx) => {
   ctx.response.body = ok(pollRowToApi(rawPoll, optionRows));
 });
 
-// POST /polls -> création poll + options (transaction)
+// POST /polls (création poll + options)
 router.post("/", async (ctx) => {
   let body: unknown;
   try {
     body = await ctx.request.body.json();
   } catch {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Invalid JSON body");
-    return;
+    throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Invalid JSON body");
   }
 
   const input = body as Partial<CreatePollInput>;
 
   if (!input.id || !input.ownerId || !input.title || !Array.isArray(input.options) || input.options.length === 0) {
-    ctx.response.status = 422;
-    ctx.response.body = fail(
+    throw new APIException(
       ApiErrorCode.VALIDATION_ERROR,
+      422,
       'Expected body: { id, ownerId, title, options:[{id,text}] }',
     );
-    return;
   }
 
   const status = input.status ?? "ACTIVE";
@@ -126,7 +108,9 @@ router.post("/", async (ctx) => {
     );
 
     input.options.forEach((opt, idx) => {
-      if (!opt?.id || !opt?.text) throw new Error("Invalid option");
+      if (!opt?.id || !opt?.text) {
+        throw new APIException(ApiErrorCode.VALIDATION_ERROR, 422, "Invalid option object");
+      }
       insertOpt.run(opt.id, input.id!, opt.text, opt.position ?? idx);
     });
 
@@ -134,9 +118,7 @@ router.post("/", async (ctx) => {
   } catch (err) {
     console.error(err);
     db.exec("ROLLBACK");
-    ctx.response.status = 409;
-    ctx.response.body = fail(ApiErrorCode.CONFLICT, "Failed to create poll (id conflict or invalid FK)");
-    return;
+    throw new APIException(ApiErrorCode.CONFLICT, 409, "Failed to create poll (id conflict or invalid FK)");
   }
 
   ctx.response.status = 201;

@@ -1,6 +1,7 @@
+// server/routes/users.ts
 import { Router } from "@oak/oak";
 import type { SQLOutputValue } from "node:sqlite";
-import { ApiErrorCode, fail, ok } from "../types/api.ts";
+import { APIException, ApiErrorCode, ok } from "../types/api.ts";
 import { db } from "../db.ts";
 
 type UserRow = {
@@ -22,7 +23,6 @@ function isUserRow(obj: Record<string, SQLOutputValue>): obj is UserRow {
 
 const router = new Router({ prefix: "/users" });
 
-/** GET /users : liste (admin dans le futur, mais TP-friendly) */
 router.get("/", (ctx) => {
   const rows = db.prepare(
     `SELECT id, email, role, created_at FROM users ORDER BY created_at DESC;`,
@@ -31,9 +31,7 @@ router.get("/", (ctx) => {
   const users = [];
   for (const r of rows) {
     if (!isUserRow(r)) {
-      ctx.response.status = 500;
-      ctx.response.body = fail(ApiErrorCode.INTERNAL_ERROR, "Invalid user row shape from database");
-      return;
+      throw new APIException(ApiErrorCode.INTERNAL_ERROR, 500, "Invalid user row shape from database");
     }
     users.push({
       id: r.id,
@@ -47,26 +45,21 @@ router.get("/", (ctx) => {
   ctx.response.body = ok(users);
 });
 
-/** POST /users : création simple (TP) */
 router.post("/", async (ctx) => {
   let body: unknown;
   try {
     body = await ctx.request.body.json();
   } catch {
-    ctx.response.status = 400;
-    ctx.response.body = fail(ApiErrorCode.BAD_REQUEST, "Invalid JSON body");
-    return;
+    throw new APIException(ApiErrorCode.BAD_REQUEST, 400, "Invalid JSON body");
   }
 
   const input = body as Partial<{ id: string; email: string; passwordHash: string; role?: "USER" | "ADMIN" }>;
-
   if (!input.id || !input.email || !input.passwordHash) {
-    ctx.response.status = 422;
-    ctx.response.body = fail(
+    throw new APIException(
       ApiErrorCode.VALIDATION_ERROR,
+      422,
       'Expected body: { "id": string, "email": string, "passwordHash": string, "role"?: "USER"|"ADMIN" }',
     );
-    return;
   }
 
   const role = input.role ?? "USER";
@@ -75,11 +68,8 @@ router.post("/", async (ctx) => {
     db.prepare(
       `INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?);`,
     ).run(input.id, input.email, input.passwordHash, role);
-  } catch (err) {
-    console.error(err);
-    ctx.response.status = 409;
-    ctx.response.body = fail(ApiErrorCode.CONFLICT, "User already exists or email already used");
-    return;
+  } catch {
+    throw new APIException(ApiErrorCode.CONFLICT, 409, "User already exists or email already used");
   }
 
   ctx.response.status = 201;
