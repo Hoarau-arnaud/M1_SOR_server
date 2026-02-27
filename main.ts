@@ -10,6 +10,7 @@ import optionsRouter from "./routes/options.ts";
 import votesRouter from "./routes/votes.ts";
 import { ok } from "./types/api.ts";
 import { entropyMiddleware } from "./middlewares/entropy_middleware.ts";
+import votesWsRouter from "./routes/votes-ws.ts";
 
 const app = new Application();
 
@@ -35,6 +36,7 @@ app.use(usersRouter.routes(), usersRouter.allowedMethods());
 app.use(pollsRouter.routes(), pollsRouter.allowedMethods());
 app.use(optionsRouter.routes(), optionsRouter.allowedMethods());
 app.use(votesRouter.routes(), votesRouter.allowedMethods());
+app.use(votesWsRouter.routes(), votesWsRouter.allowedMethods());
 
 const HOSTNAME = "127.0.0.1";
 const PORT = 8000;
